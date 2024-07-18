@@ -3096,6 +3096,52 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 	}
 
 	/**
+	 * @ticket 48823
+	 */
+	public function test_multiple_errors_are_returned_at_once() {
+		$this->grant_write_permission();
+		register_post_meta(
+			'post',
+			'error_1',
+			array(
+				'single'       => true,
+				'show_in_rest' => array(
+					'schema' => array(
+						'enum' => array( 'a', 'b' ),
+					),
+				),
+			)
+		);
+		register_post_meta(
+			'post',
+			'error_2',
+			array(
+				'single'       => true,
+				'show_in_rest' => array(
+					'schema' => array(
+						'minLength' => 1,
+					),
+				),
+			)
+		);
+
+		$request = new WP_REST_Request( 'PUT', '/wp/v2/posts/' . self::$post_id );
+		$request->set_body_params(
+			array(
+				'meta' => array(
+					'error_1' => 'c',
+					'error_2' => '',
+				),
+			)
+		);
+		$response = rest_do_request( $request );
+		$error    = $response->as_error();
+		$this->assertWPError( $error );
+		$this->assertContains( 'meta.error_1 is not one of a and b.', $error->get_error_messages() );
+		$this->assertContains( 'meta.error_2 must be at least 1 character long.', $error->get_error_messages() );
+	}
+
+	/**
 	 * Internal function used to disable an insert query which
 	 * will trigger a wpdb error for testing purposes.
 	 */
@@ -3364,7 +3410,7 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 	 * Test post meta revisions with a custom post type and the page post type.
 	 *
 	 * @group revision
-	 * @dataProvider test_revisioned_single_post_meta_with_posts_endpoint_page_and_cpt_data_provider
+	 * @dataProvider data_revisioned_single_post_meta_with_posts_endpoint_page_and_cpt_data_provider
 	 */
 	public function test_revisioned_single_post_meta_with_posts_endpoint_page_and_cpt( $passed, $expected, $post_type ) {
 
@@ -3451,7 +3497,7 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 	/**
 	 * Provide data for the meta revision checks.
 	 */
-	public function test_revisioned_single_post_meta_with_posts_endpoint_page_and_cpt_data_provider() {
+	public function data_revisioned_single_post_meta_with_posts_endpoint_page_and_cpt_data_provider() {
 		return array(
 			array(
 				'Test string',
@@ -3468,7 +3514,6 @@ class WP_Test_REST_Post_Meta_Fields extends WP_Test_REST_TestCase {
 				false,
 				'cpt',
 			),
-
 		);
 	}
 }
